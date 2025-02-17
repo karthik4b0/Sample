@@ -75,6 +75,7 @@ public BulkUploadPublishResponseData publishBulkUpload(String bulkUploadGuid, St
                             }));
                         }
 
+                       //This piece of code is similar to the previous one you asked about, but specifically handles waiting for the completion of smaller batches of tasks, each representing a batch of 5 documents being pushed to UE (User Entitlements).
                         // Wait for all small batches to complete
                         for (Future<?> smallBatchFuture : batchFutures) {
                             smallBatchFuture.get();
@@ -84,9 +85,11 @@ public BulkUploadPublishResponseData publishBulkUpload(String bulkUploadGuid, St
                         logger.error("Error occurred while processing large batch.", e);
                     }
                 });
+				//is adding a Future object (represented by the variable future) to a collection, specifically a list or set named futures.
                 futures.add(future);
             }
 
+//This piece of code is responsible for blocking the execution of the current thread until all the asynchronous tasks (represented by Future objects) in the futures list are completed. Let's break it down step by step:
             // Wait for all batch tasks to complete
             for (Future<?> future : futures) {
                 try {
@@ -95,6 +98,7 @@ public BulkUploadPublishResponseData publishBulkUpload(String bulkUploadGuid, St
                     logger.error("Error while waiting for batch processing to complete.", e);
                 }
             }
+
 
             // Shutdown executor after use
             executorService.shutdown();
