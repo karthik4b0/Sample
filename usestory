@@ -1,0 +1,25 @@
+here is the user story where 40 documents are going, in order to improve performance for 8 simultaneous requests to push entities to UE in bulk with 5 document entities like 40 documents . please understand below user story especially configuration and acceptance criteria.
+
+
+Description:
+
+As an SEI developer, I need to implement the changes design from IMSS-67 in Docs.
+
+For the Bulk Upload Publish action and the Batch job that sends document entities in bulk to UE from Docs, please implement the following configurable settings:
+
+Configuration for:
+
+How many document entities pass to UE in each request ---> 5 
+How many simultaneous requests to UE sent at once? ---> 8 
+Multiplier for how many documents we will pull in a batch
+
+As an SEI developer, please change the Docs bulk seeding batch job to make 8 simultaneous requests to push entities to UE in bulk with 5 entities in each call.
+
+The number of simultaneous requests and number of entities in a call should be configured so we can change in future.
+
+Acceptance Criteria:
+
+Validate all required changes from IMSS-67 are implemented in Docs as per the arch team's requirements
+Validate performance of UE bulk entity creation from Docs is improved as per the identified metrics as expected per the architecture team's evaluation
+
+After understanding the user story, here is the existing code logic for the following end point and code flow, please understand the  logic from below code where in bulkuploadservice publishBulkUpload method ListUtils.partition line it s passing DocConstants.UE_PUSH_MAX_DOCUMENT_SIZE = 40.  understand the entire logic and provide modified code  for above user story configuraion in the logic. please provide only the code changes need be made from below logic. in java
