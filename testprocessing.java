@@ -1,146 +1,161 @@
+import org.junit.jupiter.api.Test;
 import static org.mockito.Mockito.*;
-import static org.junit.Assert.*;
-import org.junit.Before;
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+
 import org.mockito.*;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.*;
-import java.util.concurrent.*;
-import org.apache.commons.collections4.ListUtils;
-
+@ExtendWith(MockitoExtension.class)
 public class BulkUploadPublishServiceTest {
 
-    @Mock
-    private UtilsService utilsService;
-
-    @Mock
-    private ExecutorService executorService;
+    @Captor
+    ArgumentCaptor<String> captor;
 
     @InjectMocks
     private BulkUploadPublishService bulkUploadPublishService;
 
-    private static final int batchSize = 2;
-    private static final int simultaneousRequests = 3;
+    @Mock
+    private UtilsService utilsService; // Assuming you have UtilsService that handles pushToUEAndUpdate
+    @Mock
+    private ExecutorService executorService; // Mocking the ExecutorService
+    @Mock
+    private BulkUploadRepository bulkUploadRepository;
+    @Mock
+    private BulkUploadDocumentsRepository bulkUploadDocumentsRepository;
+    @Mock
+    private DocumentService documentService;
+    @Mock
+    private BulkUploadErrorRepository bulkUploadErrorRepository;
+
+    private String bulkUploadGuid = UUID.randomUUID().toString();
+    private String requestTrackingId = UUID.randomUUID().toString();
+    private String authUserId = "svcDocUser";
 
     @Before
-    public void setUp() {
-        MockitoAnnotations.initMocks(this);
+    public void setup() {
+        MockitoAnnotations.openMocks(this);
     }
 
-    // Success Test Case with Assertions
     @Test
-    public void testPublishBulkUpload_Success() throws Exception {
+    public void testPublishPushTOUESuccess() throws Exception {
         // Setup mock data
-        List<Document> docList = new ArrayList<>();
-        docList.add(new Document("doc1"));
-        docList.add(new Document("doc2"));
+        BulkUpload bulkUpload = buildBulkUpload();
+        when(bulkUploadRepository.findByBulkUploadGUID(anyString())).thenReturn(bulkUpload);
 
-        // Mock the utilsService and ExecutorService
-        doNothing().when(utilsService).pushToUEAndUpdate(anyString(), any(), anyList(), anyMap(), anyMap());
-        when(executorService.submit(any(Runnable.class))).thenReturn(null); // Simulate the submit behavior
+        List<BulkUploadDocuments> bulkUploadDocuments = buildBulkUploadDocuments();
+        when(bulkUploadDocumentsRepository.findAllByBulkUploadId(anyLong())).thenReturn(bulkUploadDocuments);
+        when(documentService.saveAll(anyList())).thenReturn(new ArrayList<>());
+        when(bulkUploadDocumentsRepository.saveAll(anyList())).thenReturn(bulkUploadDocuments);
+        when(bulkUploadRepository.save(any())).thenReturn(bulkUpload);
+
+        // Mock the ExecutorService's behavior (avoiding actual threading)
+        Future<?> mockFuture = mock(Future.class);
+        when(executorService.submit(any(Runnable.class))).thenReturn(mockFuture);
 
         // Call the method under test
-        bulkUploadPublishService.publishBulkUpload("trackingId", new UserEntitlements(), docList);
+        BulkUploadPublishResponseData response = bulkUploadPublishService.publishBulkUpload(
+            bulkUploadGuid, authUserId, bulkUploadGuid, requestTrackingId
+        );
 
-        // Assertions to ensure the correct logic
-        // Verify that pushToUEAndUpdate was called with the correct parameters
-        verify(utilsService, times(1)).pushToUEAndUpdate(eq("trackingId"), any(UserEntitlements.class), eq(docList.subList(0, 2)), anyMap(), anyMap());
-        
-        // Optionally, check if the executor's shutdown method was called
-        verify(executorService, times(1)).shutdown();
+        // Assertions to check the response
+        assertNotNull(response);
+        assertNotNull(response.getData());
+        assertNotNull(response.getData().getBulkUploadDocuments());
+
+        assertEquals(bulkUploadGuid, response.getData().getBulkUploadGuid());
+        assertEquals(2, response.getData().getBulkUploadDocuments().size());
+
+        // Check document properties
+        assertEquals("doc1", response.getData().getBulkUploadDocuments().get(0).getDocumentName());
+        assertEquals("doc2", response.getData().getBulkUploadDocuments().get(1).getDocumentName());
+
+        // Verify interactions with the mocked executor
+        verify(executorService, times(1)).submit(any(Runnable.class));
+        verify(utilsService, times(2)).pushToUEAndUpdate(any(), any(), any(), any(), any());
     }
 
-    // Failure Test Case with DocException
     @Test
-    public void testPublishBulkUpload_Failure_DocException() throws Exception {
+    public void testPublishPushToUEException() throws Exception {
         // Setup mock data
-        List<Document> docList = new ArrayList<>();
-        docList.add(new Document("doc1"));
-        docList.add(new Document("doc2"));
+        BulkUpload bulkUpload = buildBulkUpload();
+        when(bulkUploadRepository.findByBulkUploadGUID(anyString())).thenReturn(bulkUpload);
 
-        // Mock the behavior for DocException
-        doThrow(new DocException("Failed to push")).when(utilsService).pushToUEAndUpdate(anyString(), any(), anyList(), anyMap(), anyMap());
+        List<BulkUploadDocuments> bulkUploadDocuments = buildBulkUploadDocuments();
+        when(bulkUploadDocumentsRepository.findAllByBulkUploadId(anyLong())).thenReturn(bulkUploadDocuments);
+        when(documentService.saveAll(anyList())).thenReturn(new ArrayList<>());
+        when(bulkUploadDocumentsRepository.saveAll(anyList())).thenReturn(bulkUploadDocuments);
+        when(bulkUploadRepository.save(any())).thenReturn(bulkUpload);
 
-        // Call the method under test
-        bulkUploadPublishService.publishBulkUpload("trackingId", new UserEntitlements(), docList);
+        // Mock the ExecutorService's behavior (avoiding actual threading)
+        Future<?> mockFuture = mock(Future.class);
+        when(executorService.submit(any(Runnable.class))).thenReturn(mockFuture);
 
-        // Verify that error logging occurs, assuming logger is correctly captured.
-        // You may need to capture logs or verify log calls if using SLF4J or a similar logging framework.
+        // Simulate an exception in pushToUEAndUpdate
+        doThrow(new DocException("Error pushing to UE")).when(utilsService).pushToUEAndUpdate(any(), any(), any(), any(), any());
+
+        try {
+            bulkUploadPublishService.publishBulkUpload(bulkUploadGuid, authUserId, bulkUploadGuid, requestTrackingId);
+            fail("Expected DocException to be thrown");
+        } catch (DocException e) {
+            // Assert that the exception is thrown correctly
+            assertEquals("Error pushing to UE", e.getMessage());
+        }
+
+        // Verify that the exception was thrown and handle the interactions
+        verify(executorService, times(1)).submit(any(Runnable.class));
+        verify(utilsService, times(2)).pushToUEAndUpdate(any(), any(), any(), any(), any());
     }
 
-    // Failure Test Case with InterruptedException
-    @Test
-    public void testPublishBulkUpload_Failure_InterruptedException() throws Exception {
-        // Setup mock data
-        List<Document> docList = new ArrayList<>();
-        docList.add(new Document("doc1"));
-        docList.add(new Document("doc2"));
+    // Helper methods for building mock data
 
-        // Mock the behavior for InterruptedException
-        doThrow(new InterruptedException("Execution interrupted")).when(utilsService).pushToUEAndUpdate(anyString(), any(), anyList(), anyMap(), anyMap());
-
-        // Call the method under test
-        bulkUploadPublishService.publishBulkUpload("trackingId", new UserEntitlements(), docList);
-
-        // Verify that error logging occurs for InterruptedException.
-        // Similarly to DocException, logs should be captured or verified based on your logging framework.
+    private BulkUpload buildBulkUpload() {
+        BulkUpload bulkUpload = new BulkUpload();
+        bulkUpload.setBulkUploadId(100L);
+        bulkUpload.setCreateUserId("svcDocUser1");
+        bulkUpload.setDocumentExpectedCount(2); // Assume 2 documents in the batch
+        bulkUpload.setBulkUploadGUID(bulkUploadGuid);
+        return bulkUpload;
     }
 
-    // Test to ensure the ExecutorService is shutting down correctly
-    @Test
-    public void testPublishBulkUpload_ExecutorShutdown() throws Exception {
-        // Setup mock data
-        List<Document> docList = new ArrayList<>();
-        docList.add(new Document("doc1"));
-        docList.add(new Document("doc2"));
+    private List<BulkUploadDocuments> buildBulkUploadDocuments() {
+        List<BulkUploadDocuments> bulkUploadDocuments = new ArrayList<>();
 
-        // Mock the behavior for submitting tasks to the executor service
-        when(executorService.submit(any(Runnable.class))).thenAnswer(invocation -> {
-            Runnable task = invocation.getArgument(0);
-            task.run(); // Simulate running the task immediately
-            return null;
-        });
+        // Document 1
+        BulkUploadDocuments doc1 = new BulkUploadDocuments();
+        doc1.setBulkUploadId(1L);
+        doc1.setCreateUserId(authUserId);
+        doc1.setPublishFl(true);
+        doc1.setErrorFl(false);
+        doc1.setDocument(new Document("doc1", 1L)); // Document with ID 1
+        doc1.setMetadataValidatedFl(true);
+        bulkUploadDocuments.add(doc1);
 
-        // Call the method under test
-        bulkUploadPublishService.publishBulkUpload("trackingId", new UserEntitlements(), docList);
+        // Document 2 (with error)
+        BulkUploadDocuments doc2 = new BulkUploadDocuments();
+        doc2.setBulkUploadId(2L);
+        doc2.setCreateUserId(authUserId);
+        doc2.setPublishFl(false);
+        doc2.setErrorFl(true);
+        doc2.setBulkUploadErrorId(20L);
+        doc2.setBulkUploadError(buildBUError());
+        doc2.setDocument(new Document("doc2", 2L)); // Document with ID 2
+        bulkUploadDocuments.add(doc2);
 
-        // Assertions for shutdown
-        verify(executorService, times(1)).shutdown();  // Ensure shutdown is called
-        assertTrue(executorService.isShutdown());  // Check if executor is indeed shut down
+        return bulkUploadDocuments;
     }
 
-    // Test case for empty docList
-    @Test
-    public void testPublishBulkUpload_EmptyDocList() throws Exception {
-        // Empty document list
-        List<Document> docList = new ArrayList<>();
-
-        // Call the method under test with empty list
-        bulkUploadPublishService.publishBulkUpload("trackingId", new UserEntitlements(), docList);
-
-        // Assert no tasks were submitted since the list is empty
-        verify(executorService, never()).submit(any(Runnable.class));
-    }
-
-    // Test case for docList with a single document
-    @Test
-    public void testPublishBulkUpload_SingleDocument() throws Exception {
-        // List with a single document
-        List<Document> docList = new ArrayList<>();
-        docList.add(new Document("doc1"));
-
-        // Mock the behavior for submitting tasks to the executor service
-        when(executorService.submit(any(Runnable.class))).thenAnswer(invocation -> {
-            Runnable task = invocation.getArgument(0);
-            task.run(); // Simulate running the task immediately
-            return null;
-        });
-
-        // Call the method under test
-        bulkUploadPublishService.publishBulkUpload("trackingId", new UserEntitlements(), docList);
-
-        // Assertions
-        verify(utilsService, times(1)).pushToUEAndUpdate(anyString(), any(), eq(docList), anyMap(), anyMap());
-        verify(executorService, times(1)).shutdown();  // Ensure shutdown is called
+    private BulkUploadError buildBUError() {
+        BulkUploadError error = new BulkUploadError();
+        error.setBulkUploadErrorId(20L);
+        error.setErrorCode("INTERNAL_ERROR");
+        error.setErrorDesc("Internal Network Error, Document cannot be accepted at this time");
+        return error;
     }
 }
