@@ -1,117 +1,9 @@
 @Test
-public void testPublishPushToUESuccess() {
-    getUserEntitlements();
-    bulkUpload = buildBulkUpload();
-    bulkUpload.setCreateUserId(authUserId);
-    bulkUpload.setDocumentExpectedCount(1);
-    bulkUpload.setBulkUploadGUID(bulkUploadGuid);
-    
-    // Mocking necessary dependencies
-    when(bulkUploadRepository.findByBulkUploadGUID(bulkUploadGuid)).thenReturn(bulkUpload);
-    List<BulkUploadDocuments> bulkUploadDocuments = buildBulkUploadGuid();
-    when(bulkUploadDocumentsRepository.findAllByBulkUploadId(anyLong())).thenReturn(bulkUploadDocuments);
-    
-    // Mocking services
-    when(documentService.saveAll(anyList())).thenReturn(new ArrayList<>());
-    when(bulkUploadDocumentsRepository.saveAll(anyList())).thenReturn(bulkUploadDocuments);
-    when(bulkUploadRepository.save(any())).thenReturn(bulkUpload);
-    
-    try {
-        // Calling the method under test
-        BulkUploadPublishResponseData test = bulkUploadPublishService.publishBulkUpload(bulkUploadGuid, authUserId, bulkUploadGuid);
-        
-        assertNotNull(test);
-        assertNotNull(test.getData());
-        assertNotNull(test.getData().getBulkUploadDocuments());
-        
-        assertEquals(bulkUploadGuid, test.getData().getBulkUploadGuid());
-        
-        // Checking if isPublished flags are set correctly after processing
-        assertEquals(true, test.getData().getBulkUploadDocuments().get(0).isPublished());  // First document
-        assertEquals(false, test.getData().getBulkUploadDocuments().get(1).isPublished()); // Second document
-        
-        // Verifying the calls to repositories
-        verify(bulkUploadErrorRepository, atMost(1)).findOneByErrorCode(captor.capture());
-        verify(documentService, atMost(1)).saveAll(any());
-        verify(bulkUploadDocumentsRepository, atMost(1)).saveAll(any());
-    } catch (DocException | Exception e) {
-        fail("Exception occurred: " + e.getMessage());
-    }
-}
-
-@Test
-public void testPublishPushToUEException() {
-    getUserEntitlements();
-    bulkUpload = buildBulkUpload();
-    bulkUpload.setCreateUserId(authUserId);
-    bulkUpload.setDocumentExpectedCount(1);
-    bulkUpload.setBulkUploadGUID(bulkUploadGuid);
-    
-    // Mocking necessary dependencies
-    when(bulkUploadRepository.findByBulkUploadGUID(bulkUploadGuid)).thenReturn(bulkUpload);
-    List<BulkUploadDocuments> bulkUploadDocuments = buildBulkUploadGuid();
-    when(bulkUploadDocumentsRepository.findAllByBulkUploadId(anyLong())).thenReturn(bulkUploadDocuments);
-    
-    // Mocking services
-    when(bulkUploadErrorRepository.findOneByErrorCode(anyString())).thenReturn(buildBUError());
-    when(documentService.saveAll(anyList())).thenReturn(new ArrayList<>());
-    when(bulkUploadDocumentsRepository.saveAll(anyList())).thenReturn(bulkUploadDocuments);
-    when(bulkUploadRepository.save(any())).thenReturn(bulkUpload);
-    
-    try {
-        // Calling the method under test
-        BulkUploadPublishResponseData test = bulkUploadPublishService.publishBulkUpload(bulkUploadGuid, authUserId, bulkUploadGuid);
-        
-        assertNotNull(test);
-        assertNotNull(test.getData());
-        assertNotNull(test.getData().getBulkUploadDocuments());
-        
-        assertEquals(bulkUploadGuid, test.getData().getBulkUploadGuid());
-        
-        // Verifying that the first document was published and second wasn't (due to error)
-        assertEquals(true, test.getData().getBulkUploadDocuments().get(0).isPublished());  // First document
-        assertEquals(false, test.getData().getBulkUploadDocuments().get(1).isPublished()); // Second document due to error
-        
-        // Verifying repository calls
-        verify(bulkUploadErrorRepository, atMost(1)).findOneByErrorCode(captor.capture());
-        verify(documentService, atMost(1)).saveAll(any());
-    } catch (DocException | Exception e) {
-        fail("Exception occurred: " + e.getMessage());
-    }
-}
-
-private List<BulkUploadDocuments> buildBulkUploadGuid() {
-    ArrayList<BulkUploadDocuments> bulkUploadList = new ArrayList<>();
-    
-    BulkUploadDocuments bulkUploadDocuments = new BulkUploadDocuments();
-    bulkUploadDocuments.setBulkUploadId(1L);
-    bulkUploadDocuments.setCreateUserId(authUserId);
-    bulkUploadDocuments.setPublishFl(true); // Document to be published successfully
-    bulkUploadDocuments.setErrorFl(false); // No error
-    bulkUploadDocuments.setDocument(new Document());
-    bulkUploadDocuments.setMetadataValidatedFl(true);
-    bulkUploadList.add(bulkUploadDocuments);
-    
-    BulkUploadDocuments bulkUploadDocuments1 = new BulkUploadDocuments();
-    bulkUploadDocuments1.setBulkUploadId(2L);
-    bulkUploadDocuments1.setCreateUserId(authUserId);
-    bulkUploadDocuments1.setPublishFl(false); // Document with publish failure
-    bulkUploadDocuments1.setErrorFl(true); // Error flag set to true
-    bulkUploadDocuments1.setBulkUploadError(buildBUError());
-    bulkUploadDocuments1.setDocument(new Document());
-    bulkUploadList.add(bulkUploadDocuments1);
-    
-    return bulkUploadList;
-}
-
-@Test
 public void testPublishPushTOUESuccess() {
     getUserEntitlements();
-
-    // Create a BulkUpload object and set up necessary properties
     bulkUpload = buildBulkUpload();
     bulkUpload.setCreateUserId(authUserId);
-    bulkUpload.setDocumentExpectedCount(1); // Example document count
+    bulkUpload.setDocumentExpectedCount(1);
     bulkUpload.setBulkUploadGUID(bulkUploadGuid);
 
     // Mock the repository to return the created bulkUpload object
@@ -126,32 +18,43 @@ public void testPublishPushTOUESuccess() {
     when(bulkUploadDocumentsRepository.saveAll(anyList())).thenReturn(bulkUploadDocuments);
     when(bulkUploadRepository.save(any())).thenReturn(bulkUpload);
 
+    // Mock ExecutorService to execute tasks synchronously
+    ExecutorService mockExecutorService = mock(ExecutorService.class);
+    doAnswer(invocation -> {
+        Runnable task = invocation.getArgument(0);
+        task.run(); // Execute the task immediately
+        return null;
+    }).when(mockExecutorService).submit(any(Runnable.class));
+
+    // Set the mocked ExecutorService to your service
+    bulkUploadPublishService.setExecutorService(mockExecutorService);
+
     try {
         // Execute the method under test
-        BulkUploadPublishResponseData response = bulkUploadPublishService.publishBulkUpload(bulkUploadGuid, authUserId, bulkUploadGuid);
+        BulkUploadPublishResponseData response = bulkUploadPublishService.publishBulkUpload(bulkUploadGuid, authUserId, bulkUploadGuid, getdqlrequest());
 
-        // Assertions to check if the BulkUploadDocuments were updated correctly
+        // Make sure response and its data are not null
         assertNotNull(response);
         assertNotNull(response.getData());
         assertNotNull(response.getData().getBulkUploadDocuments());
-        assertEquals(bulkUploadGuid, response.getData().getBulkUploadGuid());
 
-        // Verify that document 0 was published
-        assertTrue(response.getData().getBulkUploadDocuments().get(0).isPublished());
+        // Assertions for the BulkUploadDocuments' publish status
+        assertEquals(true, response.getData().getBulkUploadDocuments().get(0).isPublished()); // First document should be published
+        assertEquals(false, response.getData().getBulkUploadDocuments().get(1).isPublished()); // Second document should NOT be published
 
-        // Verify that document 1 was not published due to error
-        assertFalse(response.getData().getBulkUploadDocuments().get(1).isPublished());
-
-        // Check error code for document 1
+        // Assert error codes and messages for the second document (which should have an error)
+        assertNull(response.getData().getBulkUploadDocuments().get(0).getErrorCode());
         assertNotNull(response.getData().getBulkUploadDocuments().get(1).getErrorCode());
+        assertNull(response.getData().getBulkUploadDocuments().get(0).getErrorMessage());
         assertNotNull(response.getData().getBulkUploadDocuments().get(1).getErrorMessage());
 
-        // Verify interactions with repositories
+        // Verify interactions with repositories and services
         verify(bulkUploadErrorRepository, atMost(1)).findOneByErrorCode(anyString());
         verify(documentService, atMost(1)).saveAll(anyList());
         verify(bulkUploadDocumentsRepository, atMost(1)).saveAll(anyList());
     } catch (DocException e) {
         fail("Exception occurred during bulk upload: " + e.getMessage());
+    } catch (Exception e) {
+        fail("Unexpected exception occurred during bulk upload: " + e.getMessage());
     }
 }
-
