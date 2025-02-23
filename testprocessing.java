@@ -103,3 +103,55 @@ private List<BulkUploadDocuments> buildBulkUploadGuid() {
     
     return bulkUploadList;
 }
+
+@Test
+public void testPublishPushTOUESuccess() {
+    getUserEntitlements();
+
+    // Create a BulkUpload object and set up necessary properties
+    bulkUpload = buildBulkUpload();
+    bulkUpload.setCreateUserId(authUserId);
+    bulkUpload.setDocumentExpectedCount(1); // Example document count
+    bulkUpload.setBulkUploadGUID(bulkUploadGuid);
+
+    // Mock the repository to return the created bulkUpload object
+    when(bulkUploadRepository.findByBulkUploadGUID(bulkUploadGuid)).thenReturn(bulkUpload);
+
+    // Mock the BulkUploadDocuments to simulate data retrieval
+    List<BulkUploadDocuments> bulkUploadDocuments = buildBulkUploadDocuments();
+    when(bulkUploadDocumentsRepository.findAllByBulkUploadId(anyLong())).thenReturn(bulkUploadDocuments);
+
+    // Mock saving of BulkUploadDocuments and documents
+    when(documentService.saveAll(anyList())).thenReturn(new ArrayList<>());
+    when(bulkUploadDocumentsRepository.saveAll(anyList())).thenReturn(bulkUploadDocuments);
+    when(bulkUploadRepository.save(any())).thenReturn(bulkUpload);
+
+    try {
+        // Execute the method under test
+        BulkUploadPublishResponseData response = bulkUploadPublishService.publishBulkUpload(bulkUploadGuid, authUserId, bulkUploadGuid);
+
+        // Assertions to check if the BulkUploadDocuments were updated correctly
+        assertNotNull(response);
+        assertNotNull(response.getData());
+        assertNotNull(response.getData().getBulkUploadDocuments());
+        assertEquals(bulkUploadGuid, response.getData().getBulkUploadGuid());
+
+        // Verify that document 0 was published
+        assertTrue(response.getData().getBulkUploadDocuments().get(0).isPublished());
+
+        // Verify that document 1 was not published due to error
+        assertFalse(response.getData().getBulkUploadDocuments().get(1).isPublished());
+
+        // Check error code for document 1
+        assertNotNull(response.getData().getBulkUploadDocuments().get(1).getErrorCode());
+        assertNotNull(response.getData().getBulkUploadDocuments().get(1).getErrorMessage());
+
+        // Verify interactions with repositories
+        verify(bulkUploadErrorRepository, atMost(1)).findOneByErrorCode(anyString());
+        verify(documentService, atMost(1)).saveAll(anyList());
+        verify(bulkUploadDocumentsRepository, atMost(1)).saveAll(anyList());
+    } catch (DocException e) {
+        fail("Exception occurred during bulk upload: " + e.getMessage());
+    }
+}
+
