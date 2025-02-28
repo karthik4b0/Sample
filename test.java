@@ -59,12 +59,14 @@ public class BulkUploadPublishServiceTest {
         return userEntitlements;
     }
 
-    @Test
+   @Test
     public void testBatchProcessingAndExecutorService() throws InterruptedException {
         // Mock ExecutorService and UtilsService
         ExecutorService executorService = mock(ExecutorService.class);
-        doNothing().when(executorService).submit(any(Runnable.class)); // Mock submit method
-        doNothing().when(executorService).shutdown();
+        Future<?> mockFuture = mock(Future.class);
+
+        // Mock behavior of submit method: return a mock Future object (to avoid null return)
+        when(executorService.submit(any(Runnable.class))).thenReturn(mockFuture);
         when(executorService.awaitTermination(anyLong(), any(TimeUnit.class))).thenReturn(true);
 
         // Call the method to test the logic
@@ -82,8 +84,10 @@ public class BulkUploadPublishServiceTest {
     public void testPushToUEAndUpdateCalledForEachBatch() throws InterruptedException {
         // Mock ExecutorService
         ExecutorService executorService = mock(ExecutorService.class);
-        doNothing().when(executorService).submit(any(Runnable.class)); // Mock submit method
-        doNothing().when(executorService).shutdown();
+        Future<?> mockFuture = mock(Future.class);
+
+        // Mock behavior of submit method: return a mock Future object (to avoid null return)
+        when(executorService.submit(any(Runnable.class))).thenReturn(mockFuture);
         when(executorService.awaitTermination(anyLong(), any(TimeUnit.class))).thenReturn(true);
 
         // Mock the actual call to the pushToUEAndUpdate method
@@ -104,8 +108,10 @@ public class BulkUploadPublishServiceTest {
     public void testGracefulShutdownOfExecutorService() throws InterruptedException {
         // Mock ExecutorService
         ExecutorService executorService = mock(ExecutorService.class);
-        doNothing().when(executorService).submit(any(Runnable.class)); // Mock submit method
-        doNothing().when(executorService).shutdown();
+        Future<?> mockFuture = mock(Future.class);
+
+        // Mock behavior of submit method: return a mock Future object (to avoid null return)
+        when(executorService.submit(any(Runnable.class))).thenReturn(mockFuture);
         when(executorService.awaitTermination(anyLong(), any(TimeUnit.class))).thenReturn(true);
 
         // Call the method to test the logic
@@ -120,8 +126,10 @@ public class BulkUploadPublishServiceTest {
     public void testInterruptedExceptionDuringExecution() throws InterruptedException {
         // Mock ExecutorService and UtilsService
         ExecutorService executorService = mock(ExecutorService.class);
-        doNothing().when(executorService).submit(any(Runnable.class)); // Mock submit method
-        doNothing().when(executorService).shutdown();
+        Future<?> mockFuture = mock(Future.class);
+
+        // Mock behavior of submit method: return a mock Future object (to avoid null return)
+        when(executorService.submit(any(Runnable.class))).thenReturn(mockFuture);
         when(executorService.awaitTermination(anyLong(), any(TimeUnit.class))).thenThrow(new InterruptedException());
 
         // Call the method to test the logic
