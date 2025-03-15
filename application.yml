@@ -1,0 +1,8 @@
+ue:
+  bulk:
+    push:
+      documents:
+        per:
+        request: 5  # Number of documents per request
+      simultaneous:
+        requests: 8  # Number of simultaneous requests
